@@ -8,10 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
+        html, body {
+            height: 100%;
+        }
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
+            min-height: 100%;
         }
         .table-container {
             border-radius: 12px;
@@ -30,15 +35,90 @@
         }
         .notification {
             transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
-            transform: translate(-50%, -100px); /* Awalnya di atas layar */
+            transform: translate(-50%, -100px);
             opacity: 0;
             pointer-events: none;
         }
         .notification.show {
-            transform: translate(-50%, 0); /* Posisi akhir di tengah atas */
+            transform: translate(-50%, 0);
             opacity: 1;
             pointer-events: auto;
         }
+
+        /* Styles for sticky header on tables */
+        .scrolling-table-container {
+            position: relative;
+            overflow-y: auto;
+            max-height: calc(100vh - 250px);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 2px solid #FFD700;
+        }
+        .scrolling-table-container table {
+            width: 100%;
+            table-layout: fixed;
+        }
+        .scrolling-table-container thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #report-view th:nth-child(1) { width: 10%; } /* Tgl */
+        #report-view td:nth-child(1) { width: 10%; }
+        #report-view th:nth-child(2) { width: 30%; } /* Keterangan */
+        #report-view td:nth-child(2) { width: 30%; }
+        #report-view th:nth-child(3) { width: 20%; } /* Masuk */
+        #report-view td:nth-child(3) { width: 20%; }
+        #report-view th:nth-child(4) { width: 20%; } /* Keluar */
+        #report-view td:nth-child(4) { width: 20%; }
+        #report-view th:nth-child(5) { width: 20%; } /* Saldo */
+        #report-view td:nth-child(5) { width: 20%; }
+        
+        #edit-view th:nth-child(1), #edit-view td:nth-child(1) { width: 15%; }
+        #edit-view th:nth-child(2), #edit-view td:nth-child(2) { width: 25%; }
+        #edit-view th:nth-child(3), #edit-view td:nth-child(3) { width: 20%; }
+        #edit-view th:nth-child(4), #edit-view td:nth-child(4) { width: 20%; }
+        #edit-view th:nth-child(5), #edit-view td:nth-child(5) { width: 20%; }
+        
+        /* Main table styles */
+        .main-table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 2px solid #FFD700;
+        }
+        .main-table-container table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed; /* Fixed layout for consistent column width */
+        }
+        .main-table-container thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .main-table-container th, .main-table-container td {
+            white-space: normal; /* Allow text wrapping */
+            overflow: visible;
+            text-overflow: unset;
+            padding: 8px; /* Added padding for better spacing */
+            border-right: 1px solid #e5e7eb;
+        }
+        .main-table-container th:last-child, .main-table-container td:last-child {
+            border-right: none;
+        }
+        /* Adjusted widths for each column to fit all on one screen */
+        .main-table-container th:nth-child(1), .main-table-container td:nth-child(1) { width: 5%; } /* No */
+        .main-table-container th:nth-child(2), .main-table-container td:nth-child(2) { width: 10%; } /* Tanggal */
+        .main-table-container th:nth-child(3), .main-table-container td:nth-child(3) { width: 30%; } /* Keterangan */
+        .main-table-container th:nth-child(4), .main-table-container td:nth-child(4) { width: 15%; } /* Masuk */
+        .main-table-container th:nth-child(5), .main-table-container td:nth-child(5) { width: 15%; } /* Keluar */
+        .main-table-container th:nth-child(6), .main-table-container td:nth-child(6) { width: 25%; } /* Saldo */
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen pt-2 pb-10 w-full relative">
@@ -105,17 +185,18 @@
                 </div>
             </div>
             
-            <div class="overflow-x-auto w-full table-container">
-                <table class="w-full bg-white">
+            <div id="report-table-to-capture" class="scrolling-table-container w-full mx-auto">
+                <table class="w-full bg-white" id="report-table-display">
                     <thead>
-                        <tr class="bg-gray-200 text-gray-600 uppercase text-xs sm:text-sm leading-normal">
-                            <th class="py-3 px-2 sm:px-4 text-left">Tgl</th>
-                            <th class="py-3 px-2 sm:px-4 text-left">Keterangan</th>
-                            <th class="py-3 px-2 sm:px-4 text-right text-green-600">Masuk</th>
-                            <th class="py-3 px-2 sm:px-4 text-right text-red-600">Keluar</th>
+                        <tr class="bg-gray-200 text-gray-600 uppercase text-xs leading-normal">
+                            <th class="py-3 px-2 text-left">Tgl</th>
+                            <th class="py-3 px-2 text-left">Keterangan</th>
+                            <th class="py-3 px-2 text-right text-green-600">Masuk</th>
+                            <th class="py-3 px-2 text-right text-red-600">Keluar</th>
+                            <th class="py-3 px-2 text-right">Saldo</th>
                         </tr>
                     </thead>
-                    <tbody id="report-table-body" class="text-gray-600 text-xs sm:text-sm font-light">
+                    <tbody id="report-table-body" class="text-gray-600 text-xs font-light">
                         <!-- Konten tabel akan diisi oleh JavaScript -->
                     </tbody>
                 </table>
@@ -133,8 +214,8 @@
                     BIOP PJ Batur
                 </button>
             </div>
-            <div class="overflow-x-auto w-full table-container">
-                <table class="w-full bg-white">
+            <div id="edit-table-to-capture" class="scrolling-table-container">
+                <table class="w-full bg-white" id="edit-table-display">
                     <thead>
                         <tr class="bg-gray-200 text-gray-600 uppercase text-xs sm:text-sm leading-normal">
                             <th class="py-3 px-2 sm:px-4 text-left">Tgl</th>
@@ -169,8 +250,9 @@
             const reportBalanceEl = document.getElementById('report-balance');
             const reportTableBody = document.getElementById('report-table-body');
             const editTableBody = document.getElementById('edit-table-body');
+            const transactionListBody = document.getElementById('transaction-list-body');
             const emptyMessageReport = document.getElementById('empty-message-report');
-            const emptyMessageEdit = document.getElementById('empty-message-edit');
+            const emptyMessageEdit = document = document.getElementById('empty-message-edit');
             const transactionForm = document.getElementById('transaction-form');
             const submitButton = transactionForm.querySelector('button[type="submit"]');
             const notificationEl = document.getElementById('notification');
@@ -266,10 +348,8 @@
                 saveTransactions();
                 updateBalance();
                 
-                // Tampilkan notifikasi
                 showNotification('Transaksi berhasil disimpan!');
                 
-                // Reset form
                 transactionForm.reset();
                 incomeInput.value = '';
                 expenseInput.value = '';
@@ -284,24 +364,29 @@
                 } else {
                     emptyMessageReport.classList.add('hidden');
                     
+                    let currentBalance = 0;
                     transactions.forEach(transaction => {
                         const dateObj = new Date(transaction.date);
-                        const day = dateObj.getDate();
+                        const formattedDate = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
                         
+                        currentBalance += transaction.income - transaction.expense;
+
                         const row = document.createElement('tr');
                         row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-100');
+
+                        const saldoColor = currentBalance >= 0 ? 'text-green-600' : 'text-red-600';
                         
                         row.innerHTML = `
-                            <td class="py-3 px-2 sm:px-4 text-left whitespace-nowrap">${day}</td>
-                            <td class="py-3 px-2 sm:px-4 text-left">${transaction.description}</td>
-                            <td class="py-3 px-2 sm:px-4 text-right font-medium text-green-600">${transaction.income.toLocaleString('id-ID')}</td>
-                            <td class="py-3 px-2 sm:px-4 text-right font-medium text-red-600">${transaction.expense.toLocaleString('id-ID')}</td>
+                            <td class="py-3 px-2 text-left whitespace-nowrap text-xs">${formattedDate}</td>
+                            <td class="py-3 px-2 text-left text-xs">${transaction.description}</td>
+                            <td class="py-3 px-2 text-right font-medium text-green-600 text-xs">${transaction.income.toLocaleString('id-ID')}</td>
+                            <td class="py-3 px-2 text-right font-medium text-red-600 text-xs">${transaction.expense.toLocaleString('id-ID')}</td>
+                            <td class="py-3 px-2 text-right font-medium ${saldoColor} text-xs">${currentBalance.toLocaleString('id-ID')}</td>
                         `;
                         reportTableBody.appendChild(row);
                     });
                 }
                 
-                // Toggle view
                 mainView.classList.add('hidden');
                 reportView.classList.remove('hidden');
             });
@@ -317,13 +402,13 @@
                     
                     transactions.forEach((transaction, index) => {
                         const dateObj = new Date(transaction.date);
-                        const day = dateObj.getDate();
+                        const formattedDate = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
                         
                         const row = document.createElement('tr');
                         row.classList.add('border-b', 'border-gray-200', 'hover:bg-gray-100');
                         
                         row.innerHTML = `
-                            <td class="py-3 px-2 sm:px-4 text-left whitespace-nowrap">${day}</td>
+                            <td class="py-3 px-2 sm:px-4 text-left whitespace-nowrap">${formattedDate}</td>
                             <td class="py-3 px-2 sm:px-4 text-left">${transaction.description}</td>
                             <td class="py-3 px-2 sm:px-4 text-right font-medium text-green-600">${transaction.income.toLocaleString('id-ID')}</td>
                             <td class="py-3 px-2 sm:px-4 text-right font-medium text-red-600">${transaction.expense.toLocaleString('id-ID')}</td>
@@ -348,7 +433,6 @@
                             document.getElementById('expense').value = new Intl.NumberFormat('id-ID').format(transaction.expense);
                             submitButton.textContent = 'Perbarui';
 
-                            // Kembali ke main view
                             editView.classList.add('hidden');
                             mainView.classList.remove('hidden');
                             
@@ -362,12 +446,11 @@
                             transactions.splice(index, 1);
                             saveTransactions();
                             updateBalance();
-                            editButton.click(); // Perbarui tampilan edit
+                            editButton.click(); 
                         });
                     });
                 }
                 
-                // Toggle view
                 mainView.classList.add('hidden');
                 editView.classList.remove('hidden');
             });
@@ -383,7 +466,7 @@
                 editView.classList.add('hidden');
                 mainView.classList.remove('hidden');
             });
-
+            
             // Muat data saat halaman pertama kali dimuat
             loadTransactions();
         });
