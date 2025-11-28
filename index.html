@@ -103,8 +103,7 @@
       margin-top: 14px;
     }
 
-    .btn-primary { flex: 4; }
-    .btn-secondary { flex: 1; }
+    .btn-primary { flex: 1; }
 
     .btn:hover {
       transform: translateY(-1px);
@@ -152,7 +151,7 @@
       font-size: 15px;
       border: 2px solid var(--emas);
       outline: none;
-      background: #ffffff;         /* kotak isian putih */
+      background: #ffffff;
       color: #111827;
     }
 
@@ -196,15 +195,16 @@
     }
 
     tr:nth-child(even) td {
-      background: #E0FFFF; /* hilangkan background baris genap */
+      background: #E0FFFF;
     }
 
     tr:hover td {
-      background: none; /* hilangkan background hover */
+      background: none;
       transition: background 0.18s ease;
     }
 
     .text-right { text-align:right; }
+    .text-center { text-align:center; }
 
     .col-tgl {
       width: 1%;
@@ -214,8 +214,29 @@
 
     .col-amount { width: 17%; white-space: nowrap; }
 
+    .aksi-cell {
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    .btn-aksi {
+      padding: 2px 6px;
+      margin: 0 1px;
+      font-size: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--emas);
+      background: #f3f4f6;
+      cursor: pointer;
+    }
+    .btn-aksi:hover {
+      transform: translateY(-0.5px);
+    }
+    .btn-aksi:active {
+      transform: translateY(0.5px);
+    }
+
     .summary-box {
-      background: none; /* tanpa background */
+      background: none;
       padding: 8px 10px;
       margin: 6px 10px 10px;
       border-radius: 16px;
@@ -269,6 +290,70 @@
       transform: translateY(1px);
       background: rgba(248,250,252,0.8);
     }
+
+    /* === TOMBOL MELAYANG (KANAN ATAS) === */
+    .floating-menu {
+      position: absolute;
+      right: 20px;
+      top: 6px;          /* dipindah ke kanan atas */
+      bottom: auto;
+      z-index: 20;
+      display: none;
+      align-items: flex-end;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .floating-menu.show {
+      display: flex;
+    }
+
+    .fab-main {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px solid var(--emas);
+      background: radial-gradient(circle at 30% 30%, #ffffff, #16a34a);
+      color: white;
+      font-size: 20px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+    }
+
+    .fab-main:active {
+      transform: translateY(1px) scale(0.97);
+    }
+
+    .fab-options {
+      display: none;
+      margin-top: 4px;    /* karena tombol di atas, opsi di bawahnya */
+    }
+
+    .floating-menu.open .fab-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-end;
+    }
+
+    /* PERBESAR TOMBOL EDIT & LIHAT */
+    .fab-option {
+      border-radius: 12px;
+      border: 1px solid var(--emas);
+      padding: 14px 30px;   /* lebih besar */
+      font-size: 16px;     /* lebih besar */
+      font-weight: 700;
+      background: radial-gradient(circle at 30% 30%, #ffffff, #16a34a);
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+      min-width: 130px;    /* biar kelihatan besar */
+      text-align: right;
+    }
+
+    .fab-option:active {
+      transform: translateY(1px);
+    }
   </style>
 </head>
 <body>
@@ -305,7 +390,6 @@
 
     <div class="btn-row">
       <button class="btn btn-primary" id="btnSimpan">Simpan</button>
-      <button class="btn btn-secondary" id="btnLihatLaporan">Lihat</button>
     </div>
 
   </section>
@@ -328,6 +412,7 @@
           <col class="col-amount">
           <col class="col-amount">
           <col class="col-amount">
+          <col>
         </colgroup>
         <thead>
           <tr>
@@ -336,6 +421,7 @@
             <th class="text-center">Masuk</th>
             <th class="text-center">Keluar</th>
             <th class="text-center">Saldo</th>
+            <th class="text-center">Aksi</th>
           </tr>
         </thead>
         <tbody id="tbodyLaporan"></tbody>
@@ -346,10 +432,20 @@
 
   </section>
 
+  <!-- === TOMBOL MELAYANG DI HALAMAN AWAL (KANAN ATAS) === -->
+  <div id="floatingMenu" class="floating-menu">
+    <button id="fabMain" class="fab-main">≡</button>
+    <div class="fab-options">
+      <button id="btnLihatLaporan" class="fab-option">Lihat Laporan</button>
+      <button id="btnEditData" class="fab-option">Edit Data</button>
+    </div>
+  </div>
+
 </div>
 
 <script>
 let transaksi = [];
+let editIndex = null;
 
 /* Konstanta GitHub */
 const GITHUB_OWNER    = "zaidhidayat";
@@ -369,6 +465,15 @@ function formatRupiah(n){ return "Rp " + formatRibuan(n); }
 function showPage(id){
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
   document.getElementById(id).classList.add("active");
+
+  // atur visibilitas tombol melayang
+  const floatingMenu = document.getElementById("floatingMenu");
+  if(id === "page-input"){
+    floatingMenu.classList.add("show");
+  } else {
+    floatingMenu.classList.remove("show");
+    floatingMenu.classList.remove("open");
+  }
 }
 
 const appBox = document.getElementById("appBox");
@@ -379,6 +484,14 @@ const masuk = document.getElementById("masuk");
 const keluar = document.getElementById("keluar");
 const fieldMasuk = document.getElementById("fieldMasuk");
 const fieldKeluar = document.getElementById("fieldKeluar");
+
+/* Floating menu */
+const floatingMenu = document.getElementById("floatingMenu");
+const fabMain = document.getElementById("fabMain");
+
+fabMain.addEventListener("click", ()=>{
+  floatingMenu.classList.toggle("open");
+});
 
 function showBothFields(){
   fieldMasuk.style.display = "block";
@@ -445,12 +558,21 @@ document.getElementById("btnSimpan").onclick = ()=>{
     return;
   }
 
-  transaksi.push({
+  const dataBaru = {
     tanggal: tanggal.value,
     keterangan: keterangan.value.trim(),
     masuk: m,
     keluar: k
-  });
+  };
+
+  const sedangEdit = (editIndex !== null);
+
+  if(sedangEdit){
+    transaksi[editIndex] = dataBaru;
+    editIndex = null;
+  } else {
+    transaksi.push(dataBaru);
+  }
 
   localStorage.setItem("transaksi", JSON.stringify(transaksi));
 
@@ -459,7 +581,7 @@ document.getElementById("btnSimpan").onclick = ()=>{
   keterangan.value="";
   showBothFields();
 
-  alert("Tersimpan.");
+  alert(sedangEdit ? "Data diperbarui." : "Tersimpan.");
 };
 
 /* LAPORAN */
@@ -469,19 +591,24 @@ function renderLaporan(){
 
   let saldo = 0;
 
-  transaksi.forEach(t=>{
+  transaksi.forEach((t, idx)=>{
     saldo += t.masuk - t.keluar;
 
     const d = t.tanggal.split("-");
     const ddmm = `${d[2]}/${d[1]}`;
 
     const tr = document.createElement("tr");
+    tr.setAttribute("data-index", idx);
     tr.innerHTML = `
       <td class="col-tgl">${ddmm}</td>
       <td>${t.keterangan}</td>
       <td class="text-right">${t.masuk ? formatRibuan(t.masuk) : "-"}</td>
       <td class="text-right">${t.keluar ? formatRibuan(t.keluar) : "-"}</td>
       <td class="text-right">${formatRibuan(saldo)}</td>
+      <td class="aksi-cell">
+        <button class="btn-aksi btn-edit" data-index="${idx}">Edit</button>
+        <button class="btn-aksi btn-hapus" data-index="${idx}">Hapus</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -492,6 +619,59 @@ function renderLaporan(){
 
   document.getElementById("emptyState").style.display =
     transaksi.length===0 ? "block" : "none";
+
+  // Event edit/hapus per baris
+  tbody.querySelectorAll(".btn-edit").forEach(btn=>{
+    btn.onclick = ()=>{
+      const idx = parseInt(btn.getAttribute("data-index"), 10);
+      startEdit(idx);
+    };
+  });
+
+  tbody.querySelectorAll(".btn-hapus").forEach(btn=>{
+    btn.onclick = ()=>{
+      const idx = parseInt(btn.getAttribute("data-index"), 10);
+      hapusTransaksi(idx);
+    };
+  });
+}
+
+/* Mulai edit baris */
+function startEdit(idx){
+  const t = transaksi[idx];
+  if(!t) return;
+
+  editIndex = idx;
+
+  tanggal.value = t.tanggal;
+  keterangan.value = t.keterangan || "";
+  masuk.value = t.masuk ? formatRibuan(t.masuk) : "";
+  keluar.value = t.keluar ? formatRibuan(t.keluar) : "";
+
+  if(t.masuk && !t.keluar){
+    fieldMasuk.style.display = "block";
+    fieldKeluar.style.display = "none";
+  } else if(!t.masuk && t.keluar){
+    fieldMasuk.style.display = "none";
+    fieldKeluar.style.display = "block";
+  } else {
+    showBothFields();
+  }
+
+  appBox.className = "app-container pad-input";
+  rekapTitle.style.display = "block";
+  showPage("page-input");
+}
+
+/* Hapus baris */
+function hapusTransaksi(idx){
+  if(idx < 0 || idx >= transaksi.length) return;
+  const yakin = confirm("Hapus baris ini?");
+  if(!yakin) return;
+
+  transaksi.splice(idx, 1);
+  localStorage.setItem("transaksi", JSON.stringify(transaksi));
+  renderLaporan();
 }
 
 /* Generate CSV dari transaksi */
@@ -555,8 +735,17 @@ function encodeGithubContent(str){
   }
 }
 
-/* lihat laporan */
+/* lihat laporan (view) */
 document.getElementById("btnLihatLaporan").onclick = ()=>{
+  editIndex = null;
+  renderLaporan();
+  appBox.className = "app-container pad-report";
+  rekapTitle.style.display = "none";
+  showPage("page-report");
+};
+
+/* tombol edit -> buka tabel dengan aksi edit/hapus */
+document.getElementById("btnEditData").onclick = ()=>{
   renderLaporan();
   appBox.className = "app-container pad-report";
   rekapTitle.style.display = "none";
@@ -569,6 +758,7 @@ document.getElementById("btnKembali").onclick = ()=>{
   rekapTitle.style.display = "block";
   showPage("page-input");
   showBothFields();
+  editIndex = null;
 };
 
 /* SINKRON ke GitHub */
@@ -647,6 +837,9 @@ document.getElementById("btnSinkron").onclick = async ()=>{
     alert("Gagal sinkron: " + err.message);
   }
 };
+
+// inisialisasi visibilitas tombol melayang
+floatingMenu.classList.add("show");
 </script>
 
 </body>
