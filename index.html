@@ -38,6 +38,12 @@
       padding-top: 1px;
     }
 
+    /* MODE FULL SCREEN UNTUK HALAMAN LAPORAN */
+    body.body-report {
+      align-items: stretch;
+      padding: 1;
+    }
+
     .app-container {
       width: 100%;
       max-width: 480px;
@@ -50,10 +56,24 @@
       background: #E8EBEA;
     }
 
+    .app-container.full-screen {
+      height: 100vh;
+      max-height: 100vh;
+      border-radius: 0;
+    }
+
     .pad-input { padding: 22px 20px 18px; }
     .pad-report { padding: 10px 2px 2px; }
+
     .page { display: none; }
     .page.active { display: block; }
+
+    /* HALAMAN LAPORAN FLEX PENUH TINGGI CONTAINER */
+    #page-report.active {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
 
     .rekap-title {
       text-align: center;
@@ -241,7 +261,7 @@
     }
 
     .summary-box {
-      background: white;
+      background: none;
       padding: 2px 10px;
       margin: 0px 0px 0px;
       border-radius: 16px;
@@ -265,7 +285,7 @@
 
     #emptyState {
       text-align:center;
-      padding:10px;
+      padding:6px 10px;
       color:#6b7280;
       font-size:12px;
       opacity: 0.9;
@@ -368,13 +388,30 @@
     .app-container.mode-view col.col-aksi {
       display: none;
     }
+
+    /* === WRAPPER TABEL SCROLL DI HALAMAN LAPORAN === */
+    .table-wrapper {
+      padding: 0;
+      margin-top: 2px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* HEADER TABEL STICKY SAAT SCROLL */
+    .table-wrapper thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: white;          /* pastikan tidak transparan saat nempel atas */
+    }
   </style>
 </head>
 
 <body class="body-top">
 <div id="appBox" class="app-container pad-input">
 
-  <div id="rekapTitle" class="rekap-title">Rekap BIOP</div>
+  <!-- Judul halaman awal sekarang menampilkan saldo -->
+  <div id="rekapTitle" class="rekap-title">Saldo: Rp. 0</div>
 
   <!-- ================= HALAMAN INPUT ================= -->
   <section id="page-input" class="page active">
@@ -418,7 +455,8 @@
       <button id="btnSinkron">🔁</button>
     </div>
 
-    <div style="padding:0px; margin-top:2px;">
+    <!-- Tabel dalam wrapper yang bisa discroll, header sticky -->
+    <div class="table-wrapper">
       <table>
         <colgroup>
           <col class="col-tgl">
@@ -475,21 +513,13 @@ function formatRibuan(num){
 function toNumber(str){ return parseInt(str.replace(/\./g,"")) || 0; }
 function formatRupiah(n){ return "Rp " + formatRibuan(n); }
 
-/* NAV */
-function showPage(id){
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-
-  // atur visibilitas tombol melayang
-  const floatingMenu = document.getElementById("floatingMenu");
-  if(id === "page-input"){
-    floatingMenu.classList.add("show");
-    document.body.classList.add("body-top");       // konten mentok atas saat input
-  } else {
-    floatingMenu.classList.remove("show");
-    floatingMenu.classList.remove("open");
-    document.body.classList.remove("body-top");    // kembali ke tengah untuk halaman lain
-  }
+/* HITUNG & UPDATE SALDO UNTUK JUDUL HALAMAN AWAL */
+function hitungSaldo(){
+  let saldo = 0;
+  transaksi.forEach(t => {
+    saldo += t.masuk - t.keluar;
+  });
+  return saldo;
 }
 
 const appBox = document.getElementById("appBox");
@@ -500,6 +530,42 @@ const masuk = document.getElementById("masuk");
 const keluar = document.getElementById("keluar");
 const fieldMasuk = document.getElementById("fieldMasuk");
 const fieldKeluar = document.getElementById("fieldKeluar");
+
+/* Update teks judul menjadi "Saldo: Rp.XXXXXX" dan otomatis mengikuti data */
+function updateSaldoHeader(){
+  const saldoTotal = hitungSaldo();
+  rekapTitle.textContent = "Saldo: Rp. " + formatRibuan(saldoTotal);
+}
+
+/* NAV */
+function showPage(id){
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+
+  const floatingMenu = document.getElementById("floatingMenu");
+
+  if(id === "page-input"){
+    floatingMenu.classList.add("show");
+    floatingMenu.classList.remove("open");
+    document.body.classList.add("body-top");
+    document.body.classList.remove("body-report");
+    appBox.classList.remove("full-screen");
+  } else if(id === "page-report"){
+    floatingMenu.classList.remove("show");
+    floatingMenu.classList.remove("open");
+    document.body.classList.remove("body-top");
+    document.body.classList.add("body-report");
+    appBox.classList.remove("pad-input");
+    appBox.classList.add("pad-report");
+    appBox.classList.add("full-screen");
+  } else {
+    floatingMenu.classList.remove("show");
+    floatingMenu.classList.remove("open");
+    document.body.classList.remove("body-report");
+    document.body.classList.add("body-top");
+    appBox.classList.remove("full-screen");
+  }
+}
 
 /* Floating menu */
 const floatingMenu = document.getElementById("floatingMenu");
@@ -559,6 +625,8 @@ keluar.addEventListener("keydown", (e)=>{
 if(localStorage.getItem("transaksi")){
   transaksi = JSON.parse(localStorage.getItem("transaksi"));
 }
+/* Setelah load data, langsung update saldo di judul */
+updateSaldoHeader();
 
 /* SIMPAN */
 document.getElementById("btnSimpan").onclick = ()=>{
@@ -591,6 +659,9 @@ document.getElementById("btnSimpan").onclick = ()=>{
   }
 
   localStorage.setItem("transaksi", JSON.stringify(transaksi));
+
+  // update saldo header setelah simpan
+  updateSaldoHeader();
 
   masuk.value="";
   keluar.value="";
@@ -680,7 +751,9 @@ function startEdit(idx){
   }
 
   appBox.className = "app-container pad-input";
-  appBox.classList.remove("mode-view","mode-edit");
+  appBox.classList.remove("mode-view","mode-edit","full-screen");
+  document.body.classList.add("body-top");
+  document.body.classList.remove("body-report");
   rekapTitle.style.display = "block";
   showPage("page-input");
 }
@@ -693,6 +766,10 @@ function hapusTransaksi(idx){
 
   transaksi.splice(idx, 1);
   localStorage.setItem("transaksi", JSON.stringify(transaksi));
+
+  // update saldo header setelah hapus
+  updateSaldoHeader();
+
   renderLaporan();
 }
 
@@ -812,9 +889,11 @@ document.getElementById("btnLihatLaporan").onclick = ()=>{
   editIndex = null;
   renderLaporan();
   appBox.className = "app-container pad-report";
-  appBox.classList.add("mode-view");
+  appBox.classList.add("mode-view","full-screen");
   appBox.classList.remove("mode-edit");
   rekapTitle.style.display = "none";
+  document.body.classList.remove("body-top");
+  document.body.classList.add("body-report");
   showPage("page-report");
 };
 
@@ -822,28 +901,27 @@ document.getElementById("btnLihatLaporan").onclick = ()=>{
 document.getElementById("btnEditData").onclick = ()=>{
   renderLaporan();
   appBox.className = "app-container pad-report";
-  appBox.classList.add("mode-edit");
+  appBox.classList.add("mode-edit","full-screen");
   appBox.classList.remove("mode-view");
   rekapTitle.style.display = "none";
+  document.body.classList.remove("body-top");
+  document.body.classList.add("body-report");
   showPage("page-report");
 };
 
 /* kembali */
 document.getElementById("btnKembali").onclick = ()=>{
   appBox.className = "app-container pad-input";
-  appBox.classList.remove("mode-view","mode-edit");
+  appBox.classList.remove("mode-view","mode-edit","full-screen");
   rekapTitle.style.display = "block";
+  document.body.classList.add("body-top");
+  document.body.classList.remove("body-report");
   showPage("page-input");
   showBothFields();
   editIndex = null;
 };
 
-/* SINKRON ke GitHub:
-   - ambil data GitHub & lokal
-   - kalau beda, pilih yang jumlah barisnya lebih banyak
-   - simpan kembali ke localStorage & GitHub
-   - tampilkan tabel laporan
-*/
+/* SINKRON ke GitHub */
 document.getElementById("btnSinkron").onclick = async ()=>{
   const token = getGithubToken();
   if(!token) return;
@@ -892,6 +970,9 @@ document.getElementById("btnSinkron").onclick = async ()=>{
     // Simpan ke localStorage
     localStorage.setItem("transaksi", JSON.stringify(transaksi));
 
+    // UPDATE saldo header setelah sinkron
+    updateSaldoHeader();
+
     // Generate CSV final dari transaksi terpilih
     const finalCsv = generateCsvFromTransaksi();
 
@@ -926,9 +1007,11 @@ document.getElementById("btnSinkron").onclick = async ()=>{
     // Tampilkan laporan setelah sinkron
     renderLaporan();
     appBox.className = "app-container pad-report";
-    appBox.classList.add("mode-view");
+    appBox.classList.add("mode-view","full-screen");
     appBox.classList.remove("mode-edit");
     rekapTitle.style.display = "none";
+    document.body.classList.remove("body-top");
+    document.body.classList.add("body-report");
     showPage("page-report");
 
     alert("Sinkronisasi selesai. Menggunakan data dari " + sumberDipakai + ".");
@@ -944,4 +1027,4 @@ floatingMenu.classList.add("show");
 </script>
 
 </body>
-    </html>
+  </html>
