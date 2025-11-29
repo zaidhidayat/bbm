@@ -35,7 +35,7 @@
 
     body.body-top {
       align-items: flex-start;
-      padding-top: 1;
+      padding-top: 1px;
     }
 
     .app-container {
@@ -79,7 +79,7 @@
       margin: 2px auto 10px;
       cursor: pointer;
       text-align: center;
-      border: 6px solid var(--emas);
+      border: 4px solid var(--emas);
       display: block;
     }
     .btn-back-page:hover {
@@ -241,15 +241,15 @@
     }
 
     .summary-box {
-      background: none;
-      padding: 8px 10px;
-      margin: 6px 10px 10px;
+      background: white;
+      padding: 2px 10px;
+      margin: 0px 0px 0px;
       border-radius: 16px;
       font-size: 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border: 1px solid var(--emas);
+      border: 0px solid var(--emas);
     }
 
     .summary-box span {
@@ -259,7 +259,7 @@
 
     #saldo {
       font-size: 16px;
-      font-weight: 800;
+      font-weight: 900;
       text-shadow: black;
     }
 
@@ -276,10 +276,10 @@
       background: none;
       color: #111827;
       border-radius: 12px;
-      border: 2px solid var(--emas);
-      padding: 7px 18px;
+      border: 0px solid var(--emas);
+      padding: 1px 1px;
       cursor: pointer;
-      font-size: 13px;
+      font-size: 20px;
       font-weight: 800;
       text-transform: uppercase;
       letter-spacing: 0.07em;
@@ -610,8 +610,13 @@ function renderLaporan(){
   transaksi.forEach((t, idx)=>{
     saldo += t.masuk - t.keluar;
 
-    const d = t.tanggal.split("-");
-    const ddmm = `${d[2]}/${d[1]}`;
+    let ddmm = "";
+    if(t.tanggal && t.tanggal.includes("-")){
+      const d = t.tanggal.split("-");
+      ddmm = `${d[2]}/${d[1]}`;
+    } else {
+      ddmm = t.tanggal || "";
+    }
 
     const tr = document.createElement("tr");
     tr.setAttribute("data-index", idx);
@@ -698,8 +703,13 @@ function generateCsvFromTransaksi(){
 
   transaksi.forEach(t => {
     saldo += t.masuk - t.keluar;
-    const d = t.tanggal.split("-");
-    const ddmm = `${d[2]}/${d[1]}`;
+    let ddmm = "";
+    if(t.tanggal && t.tanggal.includes("-")){
+      const d = t.tanggal.split("-");
+      ddmm = `${d[2]}/${d[1]}`;
+    } else {
+      ddmm = t.tanggal || "";
+    }
 
     const masukStr  = t.masuk  ? t.masuk  : "";
     const keluarStr = t.keluar ? t.keluar : "";
@@ -716,6 +726,51 @@ function generateCsvFromTransaksi(){
 /* Normalisasi teks CSV */
 function normalizeCsvText(txt){
   return txt.replace(/\s+/g, "");
+}
+
+/* Parse CSV GitHub -> array transaksi */
+function parseTransaksiFromCsv(csvText){
+  if(!csvText) return [];
+  const rows = csvText.trim().split(/\r?\n/);
+  if(rows.length <= 1) return [];
+  const result = [];
+  const currentYear = new Date().getFullYear();
+
+  for(let i=1;i<rows.length;i++){
+    const line = rows[i].trim();
+    if(!line) continue;
+    const parts = line.split(",");
+    const tglRaw = (parts[0] || "").trim();     // dd/mm
+    const ket = (parts[1] || "").trim();
+    const masukStr  = (parts[2] || "").trim();
+    const keluarStr = (parts[3] || "").trim();
+
+    let tanggalIso = "";
+    if(tglRaw && tglRaw.includes("/")){
+      const [dd, mm] = tglRaw.split("/");
+      if(dd && mm){
+        const ddPad = dd.padStart(2,"0");
+        const mmPad = mm.padStart(2,"0");
+        tanggalIso = `${currentYear}-${mmPad}-${ddPad}`;
+      }
+    }
+
+    const masuk = parseInt(masukStr || "0", 10) || 0;
+    const keluar = parseInt(keluarStr || "0", 10) || 0;
+
+    if(!tanggalIso && !ket && !masuk && !keluar){
+      continue; // baris kosong
+    }
+
+    result.push({
+      tanggal: tanggalIso,
+      keterangan: ket,
+      masuk,
+      keluar
+    });
+  }
+
+  return result;
 }
 
 /* Ambil / minta GitHub token */
@@ -783,17 +838,15 @@ document.getElementById("btnKembali").onclick = ()=>{
   editIndex = null;
 };
 
-/* SINKRON ke GitHub */
+/* SINKRON ke GitHub:
+   - ambil data GitHub & lokal
+   - kalau beda, pilih yang jumlah barisnya lebih banyak
+   - simpan kembali ke localStorage & GitHub
+   - tampilkan tabel laporan
+*/
 document.getElementById("btnSinkron").onclick = async ()=>{
-  if(transaksi.length === 0){
-    alert("Tidak ada data untuk disinkronkan.");
-    return;
-  }
-
   const token = getGithubToken();
   if(!token) return;
-
-  const localCsv = generateCsvFromTransaksi();
 
   try {
     const getResp = await fetch(GITHUB_API_URL, {
@@ -813,20 +866,38 @@ document.getElementById("btnSinkron").onclick = async ()=>{
         remoteCsv = decodeGithubContent(data.content);
       }
     } else if(getResp.status === 404){
-      // file belum ada
+      // file belum ada di GitHub
     } else if(!getResp.ok){
       throw new Error("Gagal mengambil data GitHub (status " + getResp.status + ")");
     }
 
-    const same = normalizeCsvText(remoteCsv) === normalizeCsvText(localCsv);
-    if(same){
-      alert("Data sudah disimpan.");
+    const lokalTransaksi = transaksi.slice();
+    const remoteTransaksi = parseTransaksiFromCsv(remoteCsv);
+
+    if(lokalTransaksi.length === 0 && remoteTransaksi.length === 0){
+      alert("Tidak ada data lokal maupun GitHub untuk disinkronkan.");
       return;
     }
 
+    let sumberDipakai = "";
+    // Pilih data dengan jumlah baris lebih banyak
+    if(remoteTransaksi.length > lokalTransaksi.length){
+      transaksi = remoteTransaksi;
+      sumberDipakai = "GitHub";
+    } else {
+      transaksi = lokalTransaksi;
+      sumberDipakai = "perangkat ini";
+    }
+
+    // Simpan ke localStorage
+    localStorage.setItem("transaksi", JSON.stringify(transaksi));
+
+    // Generate CSV final dari transaksi terpilih
+    const finalCsv = generateCsvFromTransaksi();
+
     const body = {
-      message: "Update bbmbatur.csv via BIOP app",
-      content: encodeGithubContent(localCsv)
+      message: "Update bbmbatur.csv via BIOP app (sinkron)",
+      content: encodeGithubContent(finalCsv)
     };
     if(sha){
       body.sha = sha;
@@ -852,7 +923,15 @@ document.getElementById("btnSinkron").onclick = async ()=>{
       return;
     }
 
-    alert("Data sudah disimpan.");
+    // Tampilkan laporan setelah sinkron
+    renderLaporan();
+    appBox.className = "app-container pad-report";
+    appBox.classList.add("mode-view");
+    appBox.classList.remove("mode-edit");
+    rekapTitle.style.display = "none";
+    showPage("page-report");
+
+    alert("Sinkronisasi selesai. Menggunakan data dari " + sumberDipakai + ".");
 
   } catch(err){
     console.error(err);
@@ -865,4 +944,4 @@ floatingMenu.classList.add("show");
 </script>
 
 </body>
-        </html>
+    </html>
